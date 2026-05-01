@@ -29,9 +29,14 @@ struct Animation {
   int moveSpeed;
   int blinkDuration;
   int blinkInterval;
+  bool joystickControl;
 };
 
-Animation anim = {0, 0, 0, 3, 150, 4000};
+Animation anim = {0, 0, 0, 3, 150, 4000, true};
+
+// Joystick pins (ADC)
+const int JOYSTICK_X = 34;
+const int JOYSTICK_Y = 35;
 
 // Timing
 static unsigned long lastUpdateTime = 0;
@@ -102,21 +107,33 @@ void loop() {
     anim.lastBlinkTime = currentTime;
   }
 
-  // Random eye movement
-  if (currentTime - anim.lastMoveTime > random(1500, 3000) && anim.blinkState == 0) {
-    int moveType = random(0, 8);
-    switch (moveType) {
-      case 0: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 0; break;  // left
-      case 1: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 0; break;   // right
-      case 2: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = -6; break; // up-left
-      case 3: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = -6; break;  // up-right
-      case 4: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 6; break;  // down-left
-      case 5: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 6; break;   // down-right
-      default: leftEye.targetOffsetX = 0; leftEye.targetOffsetY = 0; break;  // center
-    }
+  // Joystick control (if enabled)
+  if (anim.joystickControl && anim.blinkState == 0) {
+    int joystickX = analogRead(JOYSTICK_X);
+    int joystickY = analogRead(JOYSTICK_Y);
+
+    // Map ADC values (0-4095) to eye offset range (-10 to 10)
+    leftEye.targetOffsetX = map(joystickX, 0, 4095, -10, 10);
+    leftEye.targetOffsetY = map(joystickY, 0, 4095, -8, 8);
     rightEye.targetOffsetX = leftEye.targetOffsetX;
     rightEye.targetOffsetY = leftEye.targetOffsetY;
-    anim.lastMoveTime = currentTime;
+  } else if (!anim.joystickControl) {
+    // Random eye movement (if joystick disabled)
+    if (currentTime - anim.lastMoveTime > random(1500, 3000) && anim.blinkState == 0) {
+      int moveType = random(0, 8);
+      switch (moveType) {
+        case 0: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 0; break;
+        case 1: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 0; break;
+        case 2: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = -6; break;
+        case 3: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = -6; break;
+        case 4: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 6; break;
+        case 5: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 6; break;
+        default: leftEye.targetOffsetX = 0; leftEye.targetOffsetY = 0; break;
+      }
+      rightEye.targetOffsetX = leftEye.targetOffsetX;
+      rightEye.targetOffsetY = leftEye.targetOffsetY;
+      anim.lastMoveTime = currentTime;
+    }
   }
 
   // Update eye positions
