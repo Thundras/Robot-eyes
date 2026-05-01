@@ -1,169 +1,148 @@
+/**
+ * Robot Eyes on ESP32 with 128x64 OLED display.
+ * Uses FluxGarage RoboEyes for animated eye rendering with auto-blink,
+ * auto-move (idle mode), and joystick-controlled gaze direction.
+ *
+ * Wiring:
+ *   OLED SDA -> GPIO21, SCL -> GPIO22 (hardware I2C)
+ *   Joystick HORZ -> GPIO34, VERT -> GPIO35 (ADC-only, input-only pins)
+ */
+
 #include <Arduino.h>
-#include <U8g2lib.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <RoboEyes.h>
+
+// ---------- Hardware constants ----------
+
+static constexpr uint8_t  DISPLAY_WIDTH     = 128;
+static constexpr uint8_t  DISPLAY_HEIGHT    = 64;
+static constexpr uint8_t  DISPLAY_I2C_ADDR  = 0x3C;
+static constexpr int8_t   OLED_RESET_PIN    = -1;   // no dedicated reset line
+
+static constexpr uint8_t  PIN_JOYSTICK_HORZ = 34;
+static constexpr uint8_t  PIN_JOYSTICK_VERT = 35;
+
+// ADC center value and dead-zone half-width (12-bit ADC, center ~2048)
+static constexpr int      ADC_CENTER        = 2048;
+static constexpr int      ADC_DEADZONE      = 300;
+
+// Target frame rate passed to RoboEyes (library enforces it internally)
+static constexpr uint8_t  TARGET_FPS        = 30;
+
+// Frame period in milliseconds used for deltaTime budget calculation
+static constexpr unsigned long FRAME_PERIOD_MS = 1000UL / TARGET_FPS;
+
+// ---------- Globals ----------
+
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET_PIN);
+RoboEyes roboEyes;
+
+// ---------- Helper ----------
 
 /**
- * Robot Eyes on ESP32 with 64x128 OLED display.
- * Animated eyes with blinking and random movement using U8g2 rendering.
+ * Map joystick ADC readings to one of the eight RoboEyes cardinal positions.
+ * The center dead-zone returns DEFAULT so eyes rest in the middle.
+ *
+ * @param horzRaw  Raw ADC value for horizontal axis (0-4095)
+ * @param vertRaw  Raw ADC value for vertical axis   (0-4095)
+ * @return         RoboEyes position constant
  */
+static uint8_t joystickToPosition(int horzRaw, int vertRaw) {
+    // Translate raw ADC to signed offset from center
+    int horzOffset = horzRaw - ADC_CENTER;
+    int vertOffset = vertRaw - ADC_CENTER;  // positive = joystick pushed forward (up on display)
 
-// U8g2 OLED display (SSD1306, I2C on GPIO21/22)
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE, 22, 21);
+    bool horzLeft  = horzOffset < -ADC_DEADZONE;
+    bool horzRight = horzOffset >  ADC_DEADZONE;
+    // Joystick VERT axis: pushing forward decreases ADC value on analog joystick
+    bool vertUp    = vertOffset < -ADC_DEADZONE;
+    bool vertDown  = vertOffset >  ADC_DEADZONE;
 
-// Eye parameters
-struct Eye {
-  int x, y;
-  int baseX, baseY;
-  int offsetX, offsetY;
-  int targetOffsetX, targetOffsetY;
-  int width, height;
-};
+    if (vertUp   && horzLeft)  { return NW; }
+    if (vertUp   && horzRight) { return NE; }
+    if (vertDown && horzLeft)  { return SW; }
+    if (vertDown && horzRight) { return SE; }
+    if (vertUp)                { return N;  }
+    if (vertDown)              { return S;  }
+    if (horzLeft)              { return W;  }
+    if (horzRight)             { return E;  }
 
-// Eyes fill the screen: 128x64, two eyes 40x28, 8px gap, 20px margins
-Eye leftEye  = {0, 0, 14, 18, 0, 0, 0, 0, 42, 28};
-Eye rightEye = {0, 0, 72, 18, 0, 0, 0, 0, 42, 28};
-
-// Animation state
-struct Animation {
-  unsigned long lastBlinkTime;
-  unsigned long lastMoveTime;
-  int blinkState;
-  int moveSpeed;
-  int blinkDuration;
-  int blinkInterval;
-  bool joystickControl;
-};
-
-Animation anim = {0, 0, 0, 3, 150, 4000, true};
-
-// Joystick pins (ADC)
-const int JOYSTICK_X = 34;
-const int JOYSTICK_Y = 35;
-
-
-/**
- * Draw a single eye with iris and pupil.
- */
-void drawEye(const Eye& eye) {
-  int eyeX = eye.baseX + eye.offsetX;
-  int eyeY = eye.baseY + eye.offsetY;
-
-  display.setDrawColor(1);
-
-  // Eye white (filled rounded rect)
-  display.drawRBox(eyeX, eyeY, eye.width, eye.height, 3);
-
-  // Iris and pupil drawn black on white eye
-  display.setDrawColor(0);
-  int irisX = eyeX + eye.width / 2;
-  int irisY = eyeY + eye.height / 2;
-  display.drawDisc(irisX, irisY, 7);   // iris (filled black)
-  display.setDrawColor(1);
-  display.drawDisc(irisX, irisY, 3);   // pupil highlight (white dot)
-  display.setDrawColor(0);
+    return DEFAULT;
 }
 
-/**
- * Update eye position with smooth interpolation.
- */
-void updateEyePosition(Eye& eye) {
-  eye.offsetX += (eye.targetOffsetX - eye.offsetX) / anim.moveSpeed;
-  eye.offsetY += (eye.targetOffsetY - eye.offsetY) / anim.moveSpeed;
-}
+// ---------- Arduino lifecycle ----------
 
-/**
- * Setup: Initialize hardware and display.
- */
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
+    Serial.begin(115200);
+    Serial.println("[robot-eyes] Booting...");
 
-  Serial.println("\n[robot-eyes] Starting...");
+    // GPIO34/35 are input-only on ESP32 — no pinMode needed, but explicit is safer
+    pinMode(PIN_JOYSTICK_HORZ, INPUT);
+    pinMode(PIN_JOYSTICK_VERT, INPUT);
 
-  // Initialize display
-  display.begin();
-  display.setFont(u8g2_font_ncenB08_tr);
-  display.clearBuffer();
-  display.drawStr(30, 32, "Robot Eyes");
-  display.sendBuffer();
-  delay(2000);
+    // Initialise I2C on the hardware pins wired in diagram.json
+    Wire.begin(21, 22);
 
-  Serial.println("[robot-eyes] Eyes initialized and ready");
+    if (!display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_I2C_ADDR)) {
+        Serial.println("[robot-eyes] ERROR: SSD1306 not found — halting");
+        // Spin forever; Serial output helps Wokwi / hardware debugging
+        while (true) { delay(1000); }
+    }
+
+    display.clearDisplay();
+    display.display();
+
+    // Hand the Adafruit display object to RoboEyes
+    roboEyes.begin(DISPLAY_WIDTH, DISPLAY_HEIGHT, TARGET_FPS, display);
+
+    // Monochrome: background = 0 (black), foreground = 1 (white)
+    roboEyes.setDisplayColors(0, 1);
+
+    // Eye geometry — sized to fill most of the 128x64 screen comfortably
+    roboEyes.setWidth(38, 38);
+    roboEyes.setHeight(28, 28);
+    roboEyes.setBorderradius(6, 6);
+    roboEyes.setSpacebetween(16);
+
+    // Autonomous blink every ~3 s with ±2 s variation
+    roboEyes.setAutoblinker(ON, 3, 2);
+
+    // Idle drift: random gaze change every ~4 s with ±2 s variation.
+    // This is overridden each frame when the joystick is outside the dead-zone,
+    // so idle mode acts as the fallback when the joystick rests at center.
+    roboEyes.setIdleMode(ON, 4, 2);
+
+    roboEyes.setMood(DEFAULT);
+
+    Serial.println("[robot-eyes] Ready");
 }
 
-/**
- * Main loop: Animate and render eyes.
- */
 void loop() {
-  unsigned long currentTime = millis();
+    unsigned long frameStart = millis();
 
-  // Blinking logic
-  if (currentTime - anim.lastBlinkTime > anim.blinkInterval && anim.blinkState == 0) {
-    anim.blinkState = 1;
-    anim.lastBlinkTime = currentTime;
-  } else if (currentTime - anim.lastBlinkTime > anim.blinkDuration && anim.blinkState == 1) {
-    anim.blinkState = 0;
-    anim.lastBlinkTime = currentTime;
-  }
+    // Read joystick and translate to a gaze position
+    int horzRaw = analogRead(PIN_JOYSTICK_HORZ);
+    int vertRaw = analogRead(PIN_JOYSTICK_VERT);
+    uint8_t gazePosition = joystickToPosition(horzRaw, vertRaw);
 
-  // Joystick control (if enabled)
-  if (anim.joystickControl) {
-    int joystickX = analogRead(JOYSTICK_X);
-    int joystickY = analogRead(JOYSTICK_Y);
+    // Directly set eye position when the joystick is deflected.
+    // When it returns to center (DEFAULT), idle mode takes over again.
+    roboEyes.setPosition(gazePosition);
 
-    // Inverted map: joystick center (~2048) = offset 0, push right = eyes right
-    int offsetX = map(joystickX, 0, 4095, 10, -10);
-    int offsetY = map(joystickY, 0, 4095, 8, -8);
-    leftEye.offsetX = offsetX;
-    leftEye.offsetY = offsetY;
-    rightEye.offsetX = offsetX;
-    rightEye.offsetY = offsetY;
+    // RoboEyes::update() handles framerate throttling, auto-blink, and
+    // idle movement internally — no blocking delay required here.
+    roboEyes.update();
 
-    Serial.print("JX="); Serial.print(joystickX);
-    Serial.print(" JY="); Serial.print(joystickY);
-    Serial.print(" -> offsetX="); Serial.print(offsetX);
-    Serial.print(" offsetY="); Serial.println(offsetY);
-  } else if (!anim.joystickControl) {
-    // Random eye movement (if joystick disabled)
-    if (currentTime - anim.lastMoveTime > random(1500, 3000) && anim.blinkState == 0) {
-      int moveType = random(0, 8);
-      switch (moveType) {
-        case 0: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 0; break;
-        case 1: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 0; break;
-        case 2: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = -6; break;
-        case 3: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = -6; break;
-        case 4: leftEye.targetOffsetX = -8; leftEye.targetOffsetY = 6; break;
-        case 5: leftEye.targetOffsetX = 8; leftEye.targetOffsetY = 6; break;
-        default: leftEye.targetOffsetX = 0; leftEye.targetOffsetY = 0; break;
-      }
-      rightEye.targetOffsetX = leftEye.targetOffsetX;
-      rightEye.targetOffsetY = leftEye.targetOffsetY;
-      anim.lastMoveTime = currentTime;
+    display.clearDisplay();
+    roboEyes.drawEyes();
+    display.display();
+
+    // Spend any remaining frame budget in a tight loop rather than delay(),
+    // so we stay responsive to future serial commands or interrupts.
+    unsigned long elapsed = millis() - frameStart;
+    if (elapsed < FRAME_PERIOD_MS) {
+        delay(FRAME_PERIOD_MS - elapsed);
     }
-  }
-
-  // Update eye positions
-  updateEyePosition(leftEye);
-  updateEyePosition(rightEye);
-
-  // Clear and render
-  display.clearBuffer();
-
-  // Draw eyes (skip during blink)
-  if (anim.blinkState == 0) {
-    drawEye(leftEye);
-    drawEye(rightEye);
-  } else {
-    // Blink: thick horizontal line across eye area
-    int blinkY = leftEye.baseY + leftEye.height / 2;
-    display.drawBox(leftEye.baseX,  blinkY - 2, leftEye.width,  4);
-    display.drawBox(rightEye.baseX, blinkY - 2, rightEye.width, 4);
-  }
-
-  display.sendBuffer();
-
-  // Remaining frame budget: target 33ms (30 FPS), minus actual render time
-  unsigned long renderTime = millis() - currentTime;
-  if (renderTime < 33) {
-    delay(33 - renderTime);
-  }
 }
