@@ -1,25 +1,24 @@
 #include <Arduino.h>
-#include <Adafruit_SSD1306.h>
+#include <U8g2lib.h>
 #include <Eye.h>
 
 /**
  * Robot Eyes on ESP32 with 64x128 OLED display.
- * Uses the esp32-eyes library for animated eye rendering.
+ * Uses the esp32-eyes library with U8g2 rendering.
  */
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_ADDR 0x3C
+// U8g2 OLED display instance (SSD1306, I2C mode)
+// SDA=GPIO21, SCL=GPIO22
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 22, 21);
 
-// Display and eyes instances
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-Eye eyes;
+// Face instance for eyes library
+Face face;
 
 // Timing for frame-rate-independent animation
 static unsigned long lastUpdateTime = 0;
 
 /**
- * Setup: Initialize hardware and eyes library.
+ * Setup: Initialize hardware and display.
  */
 void setup() {
   Serial.begin(115200);
@@ -27,26 +26,16 @@ void setup() {
 
   Serial.println("\n[robot-eyes] Starting...");
 
-  // Initialize I2C and OLED display
-  Wire.begin(21, 22);
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println("[ERROR] Failed to initialize OLED display");
-    while (1) {
-      delay(1000);
-    }
-  }
-
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(20, 28);
-  display.println("Robot Eyes");
-  display.display();
+  // Initialize U8G2 display
+  u8g2.begin();
+  u8g2.setFont(u8g2_font_ncenB08_tr);
+  u8g2.clearBuffer();
+  u8g2.drawStr(20, 32, "Robot Eyes");
+  u8g2.sendBuffer();
   delay(2000);
 
-  // Initialize eyes on OLED display
-  eyes.begin(SCREEN_WIDTH, SCREEN_HEIGHT, 30, 32, 98, 32);
-  eyes.setBackgroundColor(BLACK);
+  // Initialize face for eyes library
+  face.begin(u8g2);
 
   Serial.println("[robot-eyes] Eyes initialized and ready");
 }
@@ -59,13 +48,12 @@ void loop() {
   float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
   lastUpdateTime = currentTime;
 
-  // Clear display and update eye state
-  display.clearDisplay();
+  // Clear display and update face/eyes
+  u8g2.clearBuffer();
 
-  // Update eyes with frame-independent timing
-  // (eyes library handles deltaTime internally for smooth animation)
-  eyes.update(display);
+  // Update face (handles eye animation)
+  face.Update();
 
   // Render to physical display
-  display.display();
+  u8g2.sendBuffer();
 }
