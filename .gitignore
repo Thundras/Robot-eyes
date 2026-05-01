@@ -1,0 +1,26 @@
+# PlatformIO
+.pio
+.platformio
+build/
+*.bin
+*.elf
+*.hex
+*.lst
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+lib/
+.clang-tidy
+
+# Wokwi
+*.gtkw

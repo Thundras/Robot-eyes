@@ -1,0 +1,49 @@
+---
+project: robot-eyes
+title: Robot Eyes using ESP32 and OLED Display
+description: |
+  Animated robot eyes on a 64x128 OLED display controlled by ESP32.
+  Features interactive animations, eye tracking, and expression modes.
+  Built for Wokwi simulation and real hardware deployment.
+
+# Hardware
+hardware:
+  microcontroller: ESP32 Dev Module
+  display:
+    type: OLED
+    resolution: 64x128
+    driver: SSD1306
+  communication:
+    - I2C (display)
+    - Serial (debug/control)
+
+# Development
+framework: Arduino
+build_system: PlatformIO
+simulation: Wokwi
+language: C++
+
+# Code Style
+conventions:
+  - Variables: camelCase for locals, UPPER_CASE for constants
+  - Functions: descriptive names, no abbreviations
+  - Comments: explain WHY, not WHAT (code is self-documenting)
+  - No single-letter variables (except loop counters in tight loops)
+  - Brace style: always, even for single-line bodies
+
+# Constraints
+constraints:
+  - Keep compile-time flexibility: use #define for magic numbers
+  - Display memory is limited: optimize animation loops
+  - Serial debug output only in development builds
+  - No external dependencies beyond Arduino core + libraries
+
+# Files & Structure
+files:
+  src/main.cpp: Main entry point and setup
+  src/display.cpp: OLED display control
+  include/display.h: Display interface
+  include/animations.h: Animation routines
+  wokwi.toml: Wokwi simulation config
+
+---
