@@ -37,7 +37,7 @@ static constexpr unsigned long FRAME_PERIOD_MS = 1000UL / TARGET_FPS;
 // ---------- Globals ----------
 
 Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET_PIN);
-RoboEyes roboEyes;
+RoboEyes<Adafruit_SSD1306> roboEyes(display);
 
 // ---------- Helper ----------
 
@@ -94,8 +94,8 @@ void setup() {
     display.clearDisplay();
     display.display();
 
-    // Hand the Adafruit display object to RoboEyes
-    roboEyes.begin(DISPLAY_WIDTH, DISPLAY_HEIGHT, TARGET_FPS, display);
+    // Display object is passed via constructor — begin() only needs dimensions and FPS
+    roboEyes.begin(DISPLAY_WIDTH, DISPLAY_HEIGHT, TARGET_FPS);
 
     // Monochrome: background = 0 (black), foreground = 1 (white)
     roboEyes.setDisplayColors(0, 1);
@@ -131,13 +131,9 @@ void loop() {
     // When it returns to center (DEFAULT), idle mode takes over again.
     roboEyes.setPosition(gazePosition);
 
-    // RoboEyes::update() handles framerate throttling, auto-blink, and
-    // idle movement internally — no blocking delay required here.
+    // update() handles framerate throttling, auto-blink, idle movement,
+    // clearing the buffer, drawing eyes and flushing to the display.
     roboEyes.update();
-
-    display.clearDisplay();
-    roboEyes.drawEyes();
-    display.display();
 
     // Spend any remaining frame budget in a tight loop rather than delay(),
     // so we stay responsive to future serial commands or interrupts.
