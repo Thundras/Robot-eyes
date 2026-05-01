@@ -38,8 +38,6 @@ Animation anim = {0, 0, 0, 3, 150, 4000, true};
 const int JOYSTICK_X = 34;
 const int JOYSTICK_Y = 35;
 
-// Timing
-static unsigned long lastUpdateTime = 0;
 
 /**
  * Draw a single eye with iris and pupil.
@@ -51,15 +49,16 @@ void drawEye(const Eye& eye) {
   display.setDrawColor(1);
 
   // Eye white (filled rounded rect)
-  display.drawRFrame(eyeX, eyeY, eye.width, eye.height, 3);
+  display.drawRBox(eyeX, eyeY, eye.width, eye.height, 3);
 
-  // Iris (circle)
+  // Iris and pupil drawn black on white eye
+  display.setDrawColor(0);
   int irisX = eyeX + eye.width / 2;
   int irisY = eyeY + eye.height / 2;
-  display.drawCircle(irisX, irisY, 5);
-
-  // Pupil (small filled circle)
-  display.drawDisc(irisX, irisY, 2);
+  display.drawDisc(irisX, irisY, 7);   // iris (filled black)
+  display.setDrawColor(1);
+  display.drawDisc(irisX, irisY, 3);   // pupil highlight (white dot)
+  display.setDrawColor(0);
 }
 
 /**
@@ -95,8 +94,6 @@ void setup() {
  */
 void loop() {
   unsigned long currentTime = millis();
-  float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
-  lastUpdateTime = currentTime;
 
   // Blinking logic
   if (currentTime - anim.lastBlinkTime > anim.blinkInterval && anim.blinkState == 0) {
@@ -156,5 +153,10 @@ void loop() {
   }
 
   display.sendBuffer();
-  delay(16);  // ~60 FPS
+
+  // Remaining frame budget: target 33ms (30 FPS), minus actual render time
+  unsigned long renderTime = millis() - currentTime;
+  if (renderTime < 33) {
+    delay(33 - renderTime);
+  }
 }

@@ -29,7 +29,7 @@
     [ "joystick1:VRx", "esp:34", "green", [] ],
     [ "joystick1:VRy", "esp:35", "blue", [] ],
     [ "joystick1:GND", "esp:GND.1", "black", [] ],
-    [ "joystick1:VCC", "esp:5V", "red", [] ]
+    [ "joystick1:VCC", "esp:3V3", "red", [] ]
   ],
   "dependencies": {}
 }
