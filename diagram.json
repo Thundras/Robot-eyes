@@ -26,10 +26,10 @@
     [ "esp:21", "oled1:SDA", "gold", [ "h134.4" ] ],
     [ "oled1:GND", "esp:GND.2", "black", [ "v-67.2", "h-105.6" ] ],
     [ "oled1:VCC", "esp:3V3", "red", [ "v-76.8", "h-211.05" ] ],
-    [ "joystick1:X", "esp:34", "green", [] ],
-    [ "joystick1:Y", "esp:35", "blue", [] ],
+    [ "joystick1:VRx", "esp:34", "green", [] ],
+    [ "joystick1:VRy", "esp:35", "blue", [] ],
     [ "joystick1:GND", "esp:GND.1", "black", [] ],
-    [ "joystick1:+5V", "esp:5V", "red", [] ]
+    [ "joystick1:VCC", "esp:5V", "red", [] ]
   ],
   "dependencies": {}
 }
