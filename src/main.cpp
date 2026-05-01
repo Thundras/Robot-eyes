@@ -18,8 +18,9 @@ struct Eye {
   int width, height;
 };
 
-Eye leftEye = {45, 32, 45, 32, 0, 0, 0, 0, 20, 24};
-Eye rightEye = {80, 32, 80, 32, 0, 0, 0, 0, 20, 24};
+// Eyes fill the screen: 128x64, two eyes 40x28, 8px gap, 20px margins
+Eye leftEye  = {0, 0, 14, 18, 0, 0, 0, 0, 42, 28};
+Eye rightEye = {0, 0, 72, 18, 0, 0, 0, 0, 42, 28};
 
 // Animation state
 struct Animation {
@@ -109,9 +110,9 @@ void loop() {
     int joystickX = analogRead(JOYSTICK_X);
     int joystickY = analogRead(JOYSTICK_Y);
 
-    // Direct assignment — no interpolation, otherwise integer division kills small offsets
-    int offsetX = map(joystickX, 0, 4095, -10, 10);
-    int offsetY = map(joystickY, 0, 4095, -8, 8);
+    // Inverted map: joystick center (~2048) = offset 0, push right = eyes right
+    int offsetX = map(joystickX, 0, 4095, 10, -10);
+    int offsetY = map(joystickY, 0, 4095, 8, -8);
     leftEye.offsetX = offsetX;
     leftEye.offsetY = offsetY;
     rightEye.offsetX = offsetX;
@@ -152,11 +153,10 @@ void loop() {
     drawEye(leftEye);
     drawEye(rightEye);
   } else {
-    // Blink: draw horizontal lines
-    display.drawLine(leftEye.baseX, leftEye.baseY + leftEye.height / 2,
-                     leftEye.baseX + leftEye.width, leftEye.baseY + leftEye.height / 2);
-    display.drawLine(rightEye.baseX, rightEye.baseY + rightEye.height / 2,
-                     rightEye.baseX + rightEye.width, rightEye.baseY + rightEye.height / 2);
+    // Blink: thick horizontal line across eye area
+    int blinkY = leftEye.baseY + leftEye.height / 2;
+    display.drawBox(leftEye.baseX,  blinkY - 2, leftEye.width,  4);
+    display.drawBox(rightEye.baseX, blinkY - 2, rightEye.width, 4);
   }
 
   display.sendBuffer();
