@@ -105,15 +105,22 @@ void loop() {
   }
 
   // Joystick control (if enabled)
-  if (anim.joystickControl && anim.blinkState == 0) {
+  if (anim.joystickControl) {
     int joystickX = analogRead(JOYSTICK_X);
     int joystickY = analogRead(JOYSTICK_Y);
 
-    // Map ADC values (0-4095) to eye offset range (-10 to 10)
-    leftEye.targetOffsetX = map(joystickX, 0, 4095, -10, 10);
-    leftEye.targetOffsetY = map(joystickY, 0, 4095, -8, 8);
-    rightEye.targetOffsetX = leftEye.targetOffsetX;
-    rightEye.targetOffsetY = leftEye.targetOffsetY;
+    // Direct assignment — no interpolation, otherwise integer division kills small offsets
+    int offsetX = map(joystickX, 0, 4095, -10, 10);
+    int offsetY = map(joystickY, 0, 4095, -8, 8);
+    leftEye.offsetX = offsetX;
+    leftEye.offsetY = offsetY;
+    rightEye.offsetX = offsetX;
+    rightEye.offsetY = offsetY;
+
+    Serial.print("JX="); Serial.print(joystickX);
+    Serial.print(" JY="); Serial.print(joystickY);
+    Serial.print(" -> offsetX="); Serial.print(offsetX);
+    Serial.print(" offsetY="); Serial.println(offsetY);
   } else if (!anim.joystickControl) {
     // Random eye movement (if joystick disabled)
     if (currentTime - anim.lastMoveTime > random(1500, 3000) && anim.blinkState == 0) {
