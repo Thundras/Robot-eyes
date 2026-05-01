@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+
+[env]
+WOKWI = 1
