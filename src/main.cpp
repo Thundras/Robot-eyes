@@ -15,6 +15,9 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Eye eyes;
 
+// Timing for frame-rate-independent animation
+static unsigned long lastUpdateTime = 0;
+
 /**
  * Setup: Initialize hardware and eyes library.
  */
@@ -52,15 +55,17 @@ void setup() {
  * Main loop: Update eye animations and render.
  */
 void loop() {
+  unsigned long currentTime = millis();
+  float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
+  lastUpdateTime = currentTime;
+
   // Clear display and update eye state
   display.clearDisplay();
 
-  // Update eyes (handles blinking, random movements, etc.)
+  // Update eyes with frame-independent timing
+  // (eyes library handles deltaTime internally for smooth animation)
   eyes.update(display);
 
   // Render to physical display
   display.display();
-
-  // Control frame rate
-  delay(30);
 }
