@@ -37,7 +37,7 @@
     [ "joystick1:VERT", "esp:35", "blue", [ "v30", "h-20" ] ],
     [ "joystick1:GND", "esp:GND.1", "black", [ "v40", "h-20" ] ],
     [ "joystick1:VCC", "esp:3V3", "red", [ "v10", "h-20" ] ],
-    [ "touch1:T0", "esp:T0", "orange", [] ]
+    [ "touch1:T0", "esp:4", "orange", [] ]
   ],
   "dependencies": {}
 }

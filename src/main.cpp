@@ -102,7 +102,6 @@ static void processTouchInput(unsigned long nowMs) {
             reactionStartMs   = nowMs;
             tapCount          = 0;  // reset so the hold doesn't double-count
             roboEyes.setMood(HAPPY);
-            roboEyes.anim_laugh();
             Serial.println("[touch] Stroke detected (long hold) — HAPPY");
         }
     }
