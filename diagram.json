@@ -17,6 +17,13 @@
       "top": 200,
       "left": -150,
       "attrs": {}
+    },
+    {
+      "type": "wokwi-touch-area",
+      "id": "touch1",
+      "top": 200,
+      "left": 100,
+      "attrs": { "pin": "T0" }
     }
   ],
   "connections": [
@@ -29,7 +36,8 @@
     [ "joystick1:HORZ", "esp:34", "green", [ "v20", "h-20" ] ],
     [ "joystick1:VERT", "esp:35", "blue", [ "v30", "h-20" ] ],
     [ "joystick1:GND", "esp:GND.1", "black", [ "v40", "h-20" ] ],
-    [ "joystick1:VCC", "esp:3V3", "red", [ "v10", "h-20" ] ]
+    [ "joystick1:VCC", "esp:3V3", "red", [ "v10", "h-20" ] ],
+    [ "touch1:T0", "esp:T0", "orange", [] ]
   ],
   "dependencies": {}
 }
