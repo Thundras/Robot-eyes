@@ -12,7 +12,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <RoboEyes.h>
+#include <FluxGarage_RoboEyes.h>
 
 // ---------- Hardware constants ----------
 
