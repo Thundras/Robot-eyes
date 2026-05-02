@@ -19,11 +19,18 @@
       "attrs": {}
     },
     {
-      "type": "wokwi-touch-area",
+      "type": "wokwi-pushbutton",
       "id": "touch1",
-      "top": 200,
-      "left": 100,
-      "attrs": { "pin": "T0" }
+      "top": 350,
+      "left": 50,
+      "attrs": { "color": "orange", "label": "Pet" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "pullup1",
+      "top": 300,
+      "left": 50,
+      "attrs": { "value": "10000" }
     }
   ],
   "connections": [
@@ -37,7 +44,10 @@
     [ "joystick1:VERT", "esp:35", "blue", [ "v30", "h-20" ] ],
     [ "joystick1:GND", "esp:GND.1", "black", [ "v40", "h-20" ] ],
     [ "joystick1:VCC", "esp:3V3", "red", [ "v10", "h-20" ] ],
-    [ "touch1:T0", "esp:4", "orange", [] ]
+    [ "touch1:1.l", "esp:4", "orange", [] ],
+    [ "touch1:2.l", "esp:GND.1", "black", [] ],
+    [ "pullup1:1", "esp:3V3", "red", [] ],
+    [ "pullup1:2", "esp:4", "orange", [] ]
   ],
   "dependencies": {}
 }

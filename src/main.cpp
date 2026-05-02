@@ -8,7 +8,7 @@
  * Wiring:
  *   OLED SDA -> GPIO21, SCL -> GPIO22 (hardware I2C)
  *   Joystick HORZ -> GPIO34, VERT -> GPIO35 (ADC-only, input-only pins)
- *   Touch sensor OUT -> GPIO4 (capacitive touch pin T0)
+ *   Pet button -> GPIO4 (active-low, external 10k pull-up to 3.3V)
  */
 
 #include <Arduino.h>
@@ -16,6 +16,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <FluxGarage_RoboEyes.h>
+#include <esp_task_wdt.h>
 
 // ---------- Hardware constants ----------
 
@@ -30,11 +31,11 @@ static constexpr uint8_t  PIN_JOYSTICK_VERT = 35;
 // GPIO4 maps to capacitive touch channel T0 on the ESP32.
 // touchRead() returns a value inversely proportional to capacitance:
 // low value = finger detected, high value = not touched.
-static constexpr uint8_t  PIN_TOUCH         = 4;
-
-// Threshold below which touchRead() counts as a touch event.
-// Empirical value for Wokwi; adjust downward for noisier real hardware.
-static constexpr uint32_t TOUCH_THRESHOLD   = 40;
+// GPIO4 is wired to a push button (active-low) with a 10k external pull-up
+// to 3.3V. Using digitalRead() instead of touchRead() because the pull-up
+// resistor and button circuit interfere with capacitive measurement and
+// cause permanent false triggers.
+static constexpr uint8_t  PIN_BUTTON        = 4;
 
 // "Stroke" detection: 3 taps within this window counts as petting
 static constexpr unsigned long TOUCH_TAP_WINDOW_MS   = 2000UL;
@@ -50,11 +51,8 @@ static constexpr unsigned long TOUCH_REACTION_MS     = 3000UL;
 static constexpr int      ADC_CENTER        = 2048;
 static constexpr int      ADC_DEADZONE      = 300;
 
-// Target frame rate passed to RoboEyes (library enforces it internally)
+// Target frame rate passed to RoboEyes (library enforces it internally via millis())
 static constexpr uint8_t  TARGET_FPS        = 30;
-
-// Frame period in milliseconds used for deltaTime budget calculation
-static constexpr unsigned long FRAME_PERIOD_MS = 1000UL / TARGET_FPS;
 
 // ---------- Globals ----------
 
@@ -81,7 +79,9 @@ static unsigned long reactionStartMs     = 0;       // when the reaction began
  * @param nowMs  Current millis() timestamp passed in from loop()
  */
 static void processTouchInput(unsigned long nowMs) {
-    bool touchIsActive = (touchRead(PIN_TOUCH) < TOUCH_THRESHOLD);
+    // Active-low: button shorts GPIO4 to GND when pressed,
+    // external 10k pull-up holds it HIGH when released.
+    bool touchIsActive = (digitalRead(PIN_BUTTON) == LOW);
 
     // ---- Detect rising edge (finger just placed) ----
     if (touchIsActive && !touchWasActive) {
@@ -179,9 +179,14 @@ void setup() {
     pinMode(PIN_JOYSTICK_HORZ, INPUT);
     pinMode(PIN_JOYSTICK_VERT, INPUT);
 
-    // Touch pins are capacitive and need no pinMode; touchRead() works directly.
-    // The initial read is discarded so the first real read starts from a clean baseline.
-    (void)touchRead(PIN_TOUCH);
+    // External 10k pull-up to 3.3V present — INPUT, not INPUT_PULLUP.
+    pinMode(PIN_BUTTON, INPUT);
+    (void)digitalRead(PIN_BUTTON);  // discard first read to let pin settle
+
+    // Wokwi simulates I2C much slower than real hardware, which starves
+    // IDLE0 on Core 0 and triggers the task watchdog. Deregistering the
+    // WDT avoids false-positive resets in simulation.
+    esp_task_wdt_deinit();
 
     // Initialise I2C on the hardware pins wired in diagram.json
     Wire.begin(21, 22);
@@ -221,11 +226,11 @@ void setup() {
 }
 
 void loop() {
-    unsigned long frameStart = millis();
+    unsigned long nowMs = millis();
 
     // Process touch input first so a stroke reaction can override the mood
     // before roboEyes.update() renders the frame.
-    processTouchInput(frameStart);
+    processTouchInput(nowMs);
 
     // Read joystick and translate to a gaze position
     int horzRaw = analogRead(PIN_JOYSTICK_HORZ);
@@ -240,10 +245,6 @@ void loop() {
     // clearing the buffer, drawing eyes and flushing to the display.
     roboEyes.update();
 
-    // Spend any remaining frame budget in a tight loop rather than delay(),
-    // so we stay responsive to future serial commands or interrupts.
-    unsigned long elapsed = millis() - frameStart;
-    if (elapsed < FRAME_PERIOD_MS) {
-        delay(FRAME_PERIOD_MS - elapsed);
-    }
+    // roboEyes.update() handles frame-rate limiting internally via millis().
+    // No additional delay needed — adding one would interfere with the library's timing.
 }
